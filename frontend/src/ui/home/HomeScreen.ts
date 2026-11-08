@@ -3,6 +3,7 @@ import type { ThemeCss } from '../../themes/types.js';
 import type { AppMode } from '../../main.js';
 import { LeaderboardPanel } from './LeaderboardPanel.js';
 import { type NavAction, runNavAction, setFocused } from '../navFocus.js';
+import { renderMidiStatus } from '../midiStatus.js';
 
 const KEY_TO_NAV_ACTION: Record<string, NavAction> = {
   ArrowUp: 'prev',
@@ -92,8 +93,7 @@ export class HomeScreen {
   }
 
   updateMidiStatus(connected: boolean, message: string): void {
-    this._midiStatusEl.textContent = message;
-    this._midiStatusEl.className = `midi-status${connected ? ' connected' : ''}`;
+    renderMidiStatus(this._midiStatusEl, connected, message);
   }
 
   /** Re-fetch and re-render the leaderboard panel (e.g. after a scoring run

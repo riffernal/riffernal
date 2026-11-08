@@ -12,6 +12,7 @@ import { RESULTS_SCREEN_ID } from '../../game/rendering/resultsScreenElementIds.
 import { playMenuSound } from '../../audio/MenuSounds.js';
 import { isAdmin } from '../../api/AuthApi.js';
 import { FOCUS_CLASS, NAV_ITEM_CLASS, setFocused, stepFocus } from '../navFocus.js';
+import { renderMidiStatus } from '../midiStatus.js';
 
 interface GroupedItem {
   song: Song;
@@ -974,8 +975,7 @@ export class Menu {
   }
 
   setMidiStatus(connected: boolean, message: string): void {
-    this._midiStatusEl.textContent = message;
-    this._midiStatusEl.className = `midi-status${connected ? ' connected' : ''}`;
+    renderMidiStatus(this._midiStatusEl, connected, message);
 
     this._controlsHintEl?.classList.toggle('hidden', connected);
   }
