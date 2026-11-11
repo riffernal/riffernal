@@ -89,7 +89,7 @@ export class Game {
   loopPlay = false;
   practiceHand: PracticeHand = PracticeHand.Both;
   songBpm = 120;
-  showUsedKeys = false;
+  showUsedKeys = true;
   octaveAgnostic = false;
   usedNoteRange: VisibleRange | null = null;
   /** When true, the web app's synth is silent on live key presses; the

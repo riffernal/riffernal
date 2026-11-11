@@ -158,6 +158,26 @@ test.describe('Menu Screen', () => {
     await expect(checkbox).not.toBeChecked();
   });
 
+  test('show used keys toggle is checked by default for a new user', async ({ request, page }) => {
+    // A fresh user has no persisted settings, so the client-side default applies.
+    const username = uniqueUsername('used_keys_user');
+    const { user, token } = await registerUser(request, username);
+
+    await page.goto('/');
+    await page.evaluate(
+      ([t, u]) => {
+        localStorage.setItem('riffernal_token', t);
+        localStorage.setItem('riffernal_user', u);
+      },
+      [token, JSON.stringify(user)],
+    );
+    await page.reload();
+    await expectHomeScreenActive(page);
+
+    await openSettings(page);
+    await expect(page.locator('#show-used-keys')).toBeChecked();
+  });
+
   test('low-end device mode toggle is visible on settings popup', async ({ page }) => {
     await page.goto('/');
     await openSettings(page);

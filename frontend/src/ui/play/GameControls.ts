@@ -113,7 +113,7 @@ export class GameControls {
 
     try {
       const settings = await fetchUserSettings();
-      this.game.showUsedKeys = settings.piano_show_used_keys_only ?? false;
+      this.game.showUsedKeys = settings.piano_show_used_keys_only ?? true;
       showUsedKeysCheckbox.checked = this.game.showUsedKeys;
       this.game.octaveAgnostic = settings.octave_agnostic ?? false;
       octaveAgnosticCheckbox.checked = this.game.octaveAgnostic;
@@ -121,7 +121,9 @@ export class GameControls {
       setLowEndDeviceMode(lowEndMode);
       lowEndModeCheckbox.checked = lowEndMode;
     } catch {
-      /* ignore */
+      // Keep the checkbox in sync with the client-side default when the
+      // settings can't be fetched (e.g. a guest session).
+      showUsedKeysCheckbox.checked = this.game.showUsedKeys;
     }
 
     showUsedKeysCheckbox.addEventListener('change', () => {
