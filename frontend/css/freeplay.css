@@ -112,7 +112,7 @@
   pointer-events: auto;
 }
 
-#play-screen.active #sheet-resize-handle {
+#sheet-resize-handle.active {
   display: block;
 }
 

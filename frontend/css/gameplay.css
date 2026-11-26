@@ -160,10 +160,17 @@
   background: rgba(255, 102, 34, 0.12);
 }
 
-#mode-learn.active {
+#mode-learn.active,
+#notation-sheet.active {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
   background: rgba(34, 136, 255, 0.12);
+}
+
+#notation-highway.active {
+  border-color: var(--accent-orange);
+  color: var(--accent-orange);
+  background: rgba(255, 102, 34, 0.12);
 }
 
 #hand-control {

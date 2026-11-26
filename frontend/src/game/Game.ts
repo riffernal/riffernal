@@ -236,7 +236,10 @@ export class Game {
 
     this.renderer.clear();
     this.renderer.beginFrame(performance.now());
-    this.renderer.drawHighway(this.scrollOffset, this._pressedLanes, this.usedNoteRange);
+
+    if (!this.renderer.standardNotation) {
+      this.renderer.drawHighway(this.scrollOffset, this._pressedLanes, this.usedNoteRange);
+    }
 
     if (this.state === GameState.Playing) {
       this._renderPlayingFrame(delta);
@@ -247,11 +250,14 @@ export class Game {
       this._resizeHandle.style.top = `${this.renderer.sheetBottom}px`;
     }
 
-    this.renderer.drawParticles();
+    if (!this.renderer.standardNotation) this.renderer.drawParticles();
     this.renderer.piano.showComputerKeys =
       this._midiInput.device.type === InputDeviceType.ComputerKeyboard;
     this.renderer.drawPiano(this._pressedLanes, this.usedNoteRange);
-    this.renderer.drawHitZone(this._pressedLanes, this.usedNoteRange);
+
+    if (!this.renderer.standardNotation) {
+      this.renderer.drawHitZone(this._pressedLanes, this.usedNoteRange);
+    }
 
     if (this.state !== GameState.Menu) {
       if (this._debugHud.visible) {
@@ -538,28 +544,30 @@ export class Game {
       this.songBpm,
     );
 
-    const activeNotes = this.noteManager.getActiveNotes(
-      this.currentTime,
-      this.renderer.height,
-      this.learningMode,
-    );
-    const combo = this.noteManager.scoring.combo;
-    for (const note of activeNotes) {
-      this.renderer.drawNote(
-        note.lane,
-        note.y,
-        note.height,
-        note.selected ? note.color : themeManager.canvas.backingNote,
-        note.alpha,
-        combo,
-        note.key,
-        note.holding,
-        note.waiting,
-        this.usedNoteRange,
+    if (!this.renderer.standardNotation) {
+      const activeNotes = this.noteManager.getActiveNotes(
+        this.currentTime,
+        this.renderer.height,
+        this.learningMode,
       );
-    }
+      const combo = this.noteManager.scoring.combo;
+      for (const note of activeNotes) {
+        this.renderer.drawNote(
+          note.lane,
+          note.y,
+          note.height,
+          note.selected ? note.color : themeManager.canvas.backingNote,
+          note.alpha,
+          combo,
+          note.key,
+          note.holding,
+          note.waiting,
+          this.usedNoteRange,
+        );
+      }
 
-    this.renderer.drawGrind(this.currentTime, this.usedNoteRange);
+      this.renderer.drawGrind(this.currentTime, this.usedNoteRange);
+    }
 
     this.scoreDisplay?.update(this.noteManager.scoring);
     if (this._frameCount % 6 === 0) {
@@ -583,6 +591,9 @@ export class Game {
   // -- Song lifecycle -------------------------------------------------------
 
   start(song: Song): void {
+    this._resizeHandle.classList.toggle('active', !this.renderer.standardNotation);
+    this._resizeHandle.classList.toggle('hidden', this.renderer.standardNotation);
+
     if (this._animationId !== null) {
       cancelAnimationFrame(this._animationId);
       this._animationId = null;
@@ -653,6 +664,12 @@ export class Game {
     if (this._currentSong) {
       this._computeUsedNoteRange(this._currentSong);
     }
+  }
+
+  setStandardNotation(enabled: boolean): void {
+    this.renderer.setStandardNotation(enabled);
+    this._resizeHandle.classList.toggle('hidden', enabled);
+    this._resizeHandle.classList.toggle('active', !enabled);
   }
 
   private _setupInputHandlers(): void {

@@ -124,6 +124,50 @@ test.describe('Loops - UI', () => {
     expect(loops).toEqual([]);
   });
 
+  test('standard notation view is selectable and persists', async ({ page }) => {
+    await startGame(page);
+    await page.locator('#notation-sheet').click();
+    await expect(page.locator('#notation-sheet')).toHaveClass(/active/);
+    await expect(page.locator('#notation-highway')).not.toHaveClass(/active/);
+    await expect
+      .poll(() => page.evaluate(() => (window as any)._game.renderer.standardNotation))
+      .toBe(true);
+    await expect(page.locator('#sheet-resize-handle')).toBeHidden();
+
+    await page.locator('#notation-highway').click();
+    await expect(page.locator('#notation-highway')).toHaveClass(/active/);
+    await expect(page.locator('#sheet-resize-handle')).toBeVisible();
+  });
+
+  test('piano-key hover shows standard note names', async ({ page }) => {
+    await startGame(page);
+    await closeSongInfoPopup(page);
+    await page.evaluate(() => {
+      (window as any)._game.setShowUsedKeys(false);
+    });
+    const positions = await page.evaluate(() => {
+      const g = (window as any)._game;
+      const rect = document.getElementById('gameCanvas')!.getBoundingClientRect();
+      return ['C4', 'C#4'].map((key) => {
+        const layout = g.renderer.pianoKeyLayout(key, g.usedNoteRange);
+        return {
+          key,
+          x: rect.left + layout.x + layout.width / 2,
+          y: rect.top + layout.y + layout.height * (key.includes('#') ? 0.5 : 0.85),
+        };
+      });
+    });
+
+    for (const position of positions) {
+      await page.mouse.move(position.x, position.y);
+      await expect(page.locator('.pixel-tooltip')).toHaveText(position.key);
+    }
+
+    const canvas = await page.locator('#gameCanvas').boundingBox();
+    await page.mouse.move(canvas!.x + canvas!.width / 2, canvas!.y + canvas!.height / 3);
+    await expect(page.locator('.pixel-tooltip')).toBeHidden();
+  });
+
   test('open-sheet button toggles the full sheet view', async ({ page }) => {
     await startGame(page);
     await expectSheetScreenInactive(page);
@@ -147,11 +191,30 @@ test.describe('Loops - UI', () => {
     await page.locator(SHEET_NEXT_BTN).click();
     await expect(page.locator(SHEET_PAGE_INFO)).toContainText('2 /');
 
+    const target = await page.evaluate(async () => {
+      const g = (window as any)._game;
+      // @ts-expect-error browser-side dynamic import
+      const { Renderer, SHEET_BEATS_VISIBLE } = await import('/js/game/rendering/Renderer.js');
+      const canvas = document.getElementById('sheet-canvas') as HTMLCanvasElement;
+      const renderer = new Renderer(canvas);
+      renderer.sheetScale = 1.5;
+      const pageDuration = SHEET_BEATS_VISIBLE * (60 / g.songBpm);
+      const start = pageDuration;
+      const note = g.noteManager.notes.find((candidate: any) => candidate.time >= start);
+      renderer.drawSheetMusic(
+        g.noteManager.trebleNotes,
+        g.noteManager.bassNotes,
+        g.currentTime,
+        g.noteManager.getSongDuration(),
+        undefined,
+        { start, end: start + pageDuration },
+        g.songBpm,
+      );
+      return renderer.notePixelPosition(note!);
+    });
     const rect = await page.locator(SHEET_CANVAS).boundingBox();
     expect(rect).not.toBeNull();
-    const clickX = rect!.x + rect!.width * 0.4;
-    const clickY = rect!.y + 120;
-    await page.mouse.click(clickX, clickY);
+    await page.mouse.click(rect!.x + target!.x, rect!.y + target!.y);
 
     await expectSheetScreenInactive(page);
     await openSheet(page);
@@ -214,7 +277,7 @@ test.describe('Loops - UI', () => {
     await expect(tooltip).toHaveText(`${m}:${sec}.${ms}`);
 
     const rect = await page.locator('#gameCanvas').boundingBox();
-    await page.mouse.move(rect!.x + rect!.width * 0.5, rect!.y + rect!.height * 0.95);
+    await page.mouse.move(rect!.x + rect!.width * 0.5, rect!.y + rect!.height * 0.5);
     await expect(tooltip).toBeHidden();
   });
 
@@ -225,8 +288,29 @@ test.describe('Loops - UI', () => {
     await page.locator(SHEET_NEXT_BTN).click();
     await expect(page.locator(SHEET_PAGE_INFO)).toContainText('2 /');
 
+    const target = await page.evaluate(async () => {
+      const g = (window as any)._game;
+      // @ts-expect-error browser-side dynamic import
+      const { Renderer, SHEET_BEATS_VISIBLE } = await import('/js/game/rendering/Renderer.js');
+      const canvas = document.getElementById('sheet-canvas') as HTMLCanvasElement;
+      const renderer = new Renderer(canvas);
+      renderer.sheetScale = 1.5;
+      const pageDuration = SHEET_BEATS_VISIBLE * (60 / g.songBpm);
+      const start = pageDuration;
+      const note = g.noteManager.trebleNotes.find((candidate: any) => candidate.time >= start);
+      renderer.drawSheetMusic(
+        g.noteManager.trebleNotes,
+        g.noteManager.bassNotes,
+        g.currentTime,
+        g.noteManager.getSongDuration(),
+        undefined,
+        { start, end: start + pageDuration },
+        g.songBpm,
+      );
+      return renderer.notePixelPosition(note!);
+    });
     const rect = await page.locator(SHEET_CANVAS).boundingBox();
-    await page.mouse.move(rect!.x + rect!.width * 0.4, rect!.y + 120);
+    await page.mouse.move(rect!.x + target.x, rect!.y + target.y);
     await expect(page.locator('.pixel-tooltip')).toBeVisible();
     await expect(page.locator('.pixel-tooltip')).toHaveText(/^\d+:\d{2}\.\d{3}$/);
   });
