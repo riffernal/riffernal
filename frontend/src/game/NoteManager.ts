@@ -165,6 +165,7 @@ export class NoteManager {
         };
       })
       .sort((a, b) => a.time - b.time);
+    this._assignChordHands();
     this._noteEndMax = new Array(this.notes.length);
     let maxEnd = 0;
     for (let i = 0; i < this.notes.length; i++) {
@@ -191,6 +192,39 @@ export class NoteManager {
       if (!this._laneHand.has(note.lane)) {
         this._laneHand.set(note.lane, note.hand);
       }
+    }
+  }
+
+  private _assignChordHands(): void {
+    let start = 0;
+
+    while (start < this.notes.length) {
+      let end = start + 1;
+
+      while (
+        end < this.notes.length &&
+        this.notes[end].track === this.notes[start].track &&
+        Math.abs(this.notes[end].time - this.notes[start].time) < 0.001
+      ) {
+        end++;
+      }
+
+      const chord = this.notes.slice(start, end).sort((a, b) => a.lane - b.lane);
+
+      if (chord.length === 2) {
+        const gap = chord[1].lane - chord[0].lane;
+        const lower = chord[0].lane;
+        const upper = chord[1].lane;
+        const C4 = NOTE_TO_LANE.get('C4')!;
+        const E4 = NOTE_TO_LANE.get('E4')!;
+
+        if (gap >= 12 && upper >= C4 && lower <= E4) {
+          chord[0].hand = HandSide.Left;
+          chord[1].hand = HandSide.Right;
+        }
+      }
+
+      start = end;
     }
   }
 

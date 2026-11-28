@@ -4,6 +4,29 @@ import { makeSong, evaluateWithNoteManager, buildFreezeResumeScript } from '../.
 // -- NoteManager unit tests --------------------------------------------------
 
 test.describe('Practice Hand - NoteManager', () => {
+  test('wide simultaneous dyads split between bass and treble staves', async ({ page }) => {
+    await page.goto('/');
+    const song = makeSong([
+      { time: 0, key: 'A4', duration: 0.14 },
+      { time: 40.14, key: 'D4', duration: 0.14 },
+      { time: 40.14, key: 'D#5', duration: 0.14 },
+    ]);
+    song.tracks = [{ index: 0, name: 'Janne', noteCount: 3 }];
+    song.selectedTrackIndices = [0];
+    song.trackHands = { 0: 'right' };
+
+    const result = await evaluateWithNoteManager(
+      page,
+      song,
+      `return nm.notes.map((note) => ({ key: note.key, hand: note.hand }));`,
+    );
+
+    expect(result).toEqual([
+      { key: 'A4', hand: 'right' },
+      { key: 'D4', hand: 'left' },
+      { key: 'D#5', hand: 'right' },
+    ]);
+  });
   test('getEarliestWaitTime skips non-practiced hand notes (left practice)', async ({ page }) => {
     await page.goto('/');
     const song = makeSong([
