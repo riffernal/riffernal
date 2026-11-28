@@ -21,7 +21,7 @@ import { reportError } from '../../utils/helpers.js';
 
 const SHEET_STAFF_LINE_SPACING = 10;
 export const BASE_SHEET_HEIGHT =
-  5 + 4 * SHEET_STAFF_LINE_SPACING + 8 + 4 * SHEET_STAFF_LINE_SPACING + 5;
+  5 + 4 * SHEET_STAFF_LINE_SPACING + 24 + 4 * SHEET_STAFF_LINE_SPACING + 5;
 
 export interface SheetViewDeps {
   setMode: (learning: boolean) => void;

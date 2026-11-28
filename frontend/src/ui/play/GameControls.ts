@@ -18,7 +18,11 @@ export class GameControls {
     const handRight = document.getElementById('hand-right')!;
     const loopPlayBtn = document.getElementById(BTN_LOOP_PLAY_ID)!;
     const pauseBtn = document.getElementById('btn-pause')!;
+    const notationHighway = document.getElementById('notation-highway')!;
+    const notationSheet = document.getElementById('notation-sheet')!;
 
+    notationHighway.addEventListener('click', () => this.setStandardNotation(false));
+    notationSheet.addEventListener('click', () => this.setStandardNotation(true));
     modePlay.addEventListener('click', () => this.setMode(false));
     modeLearn.addEventListener('click', () => this.setMode(true));
     loopPlayBtn.addEventListener('click', () => {
@@ -117,6 +121,7 @@ export class GameControls {
       showUsedKeysCheckbox.checked = this.game.showUsedKeys;
       this.game.octaveAgnostic = settings.octave_agnostic ?? false;
       octaveAgnosticCheckbox.checked = this.game.octaveAgnostic;
+      this.setStandardNotation(settings.standard_notation ?? false, false);
       const lowEndMode = settings.low_end_device_mode ?? false;
       setLowEndDeviceMode(lowEndMode);
       lowEndModeCheckbox.checked = lowEndMode;
@@ -146,6 +151,18 @@ export class GameControls {
         console.warn('Failed to save settings:', e),
       );
     });
+  }
+
+  setStandardNotation(enabled: boolean, persist = true): void {
+    this.game.setStandardNotation(enabled);
+    document.getElementById('notation-highway')!.classList.toggle('active', !enabled);
+    document.getElementById('notation-sheet')!.classList.toggle('active', enabled);
+
+    if (persist) {
+      updateUserSettings({ standard_notation: enabled }).catch((e) =>
+        console.warn('Failed to save settings:', e),
+      );
+    }
   }
 
   /** Switch LEARN/PLAY mode. `persist = false` skips storing it as the

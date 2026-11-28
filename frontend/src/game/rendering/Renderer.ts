@@ -11,7 +11,7 @@ import {
   whiteKeyWidth,
   countWhiteKeysInRange,
 } from '../../utils/notes.js';
-import type { VisibleRange } from '../../utils/notes.js';
+import type { PianoKeyLayout, VisibleRange } from '../../utils/notes.js';
 import { HIT_ZONE_Y_RATIO } from '../NoteManager.js';
 import { LoopDefinitionState } from '../Loop.js';
 import { PianoRenderer, INDICATOR_BAR_OFFSET } from './PianoRenderer.js';
@@ -26,7 +26,7 @@ const HIGHWAY_BELOW_HIT_ZONE = 14;
 const CLEF_WIDTH = 25;
 const SHEET_MARGIN = 8;
 const STAFF_TOP_PADDING = 5;
-const STAFF_GAP = 8;
+const STAFF_GAP = 24;
 const STAFF_BOTTOM_PADDING = 5;
 /** Fraction of CSS resolution canvases render at; the browser upscales
  *  with image-rendering: pixelated for the retro pixel look. */
@@ -37,99 +37,21 @@ export const CLEF_TYPES = {
   TREBLE: 'treble',
 } as const;
 
-export const BASS_STAFF_POSITIONS: Record<string, number> = {
-  A0: -12,
-  'A#0': -12,
-  B0: -11,
-  C1: -10,
-  'C#1': -10,
-  D1: -9,
-  'D#1': -9,
-  E1: -8,
-  F1: -7,
-  'F#1': -7,
-  G1: -6,
-  'G#1': -6,
-  A1: -5,
-  'A#1': -5,
-  B1: -4,
-  C2: -3,
-  'C#2': -3,
-  D2: -2,
-  'D#2': -2,
-  E2: -1,
-  F2: 0,
-  'F#2': 0,
-  G2: 1,
-  'G#2': 1,
-  A2: 2,
-  'A#2': 2,
-  B2: 3,
-  C3: 4,
-  'C#3': 4,
-  D3: 5,
-  'D#3': 5,
-  E3: 6,
-  F3: 7,
-  'F#3': 7,
-  G3: 8,
-  'G#3': 8,
-  A3: 9,
-  'A#3': 9,
-  B3: 10,
-};
+function diatonicStaffPositions(reference: string): Record<string, number> {
+  const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const index = (name: string): number => {
+    const match = name.match(/^([A-G])(\d)$/)!;
+    return parseInt(match[2], 10) * letters.length + letters.indexOf(match[1]);
+  };
+  const referenceIndex = index(reference);
+  return Object.fromEntries(
+    NOTE_NAMES.map((name) => [name, index(name.replace('#', '')) - referenceIndex]),
+  );
+}
 
-export const TREBLE_STAFF_POSITIONS: Record<string, number> = {
-  C4: 1,
-  'C#4': 1,
-  D4: 2,
-  'D#4': 2,
-  E4: 3,
-  F4: 4,
-  'F#4': 4,
-  G4: 5,
-  'G#4': 5,
-  A4: 6,
-  'A#4': 6,
-  B4: 7,
-  C5: 8,
-  'C#5': 8,
-  D5: 9,
-  'D#5': 9,
-  E5: 10,
-  F5: 11,
-  'F#5': 11,
-  G5: 12,
-  'G#5': 12,
-  A5: 13,
-  'A#5': 13,
-  B5: 14,
-  C6: 15,
-  'C#6': 15,
-  D6: 16,
-  'D#6': 16,
-  E6: 17,
-  F6: 18,
-  'F#6': 18,
-  G6: 19,
-  'G#6': 19,
-  A6: 20,
-  'A#6': 20,
-  B6: 21,
-  C7: 22,
-  'C#7': 22,
-  D7: 23,
-  'D#7': 23,
-  E7: 24,
-  F7: 25,
-  'F#7': 25,
-  G7: 26,
-  'G#7': 26,
-  A7: 27,
-  'A#7': 27,
-  B7: 28,
-  C8: 29,
-};
+export const BASS_STAFF_POSITIONS = diatonicStaffPositions('G2');
+
+export const TREBLE_STAFF_POSITIONS = diatonicStaffPositions('E4');
 
 export const NOTE_TO_CLEF: Record<string, string> = {
   A0: CLEF_TYPES.BASS,
@@ -252,8 +174,11 @@ interface GrindFlash {
 }
 
 const SHEET_STAFF_LINE_SPACING = 10;
+const SHEET_BASE_HEIGHT = 5 + 4 * SHEET_STAFF_LINE_SPACING + STAFF_GAP + 4 * SHEET_STAFF_LINE_SPACING + 5;
 const SHEET_NOTE_RADIUS = 4.5;
 export const SHEET_BEATS_VISIBLE = 18;
+const STANDARD_NOTATION_BEATS_VISIBLE = 8;
+const STANDARD_NOTATION_MAX_SCALE = 3;
 const SHEET_BEATS_PER_MEASURE = 4;
 
 // Size of one "big pixel" on the highway. All note rects snap to this grid,
@@ -300,7 +225,7 @@ function pixelBox(
 }
 
 const SHEET_NOTE_POSITIONS: Record<string, number> = Object.assign(
-  Object.fromEntries(Object.entries(BASS_STAFF_POSITIONS).map(([k, v]) => [k, v - 3])),
+  BASS_STAFF_POSITIONS,
   TREBLE_STAFF_POSITIONS,
 );
 
@@ -350,6 +275,8 @@ interface SheetLayout {
   viewStart: number;
   viewEnd: number;
   staffLineSpacing: number;
+  scale: number;
+  beatsPerSecond: number;
 }
 
 export class Renderer {
@@ -371,14 +298,18 @@ export class Renderer {
   sheetBarW = 0;
   sheetViewStart = 0;
   sheetViewEnd = 0;
+  standardNotation = false;
   sheetTrebleTop = 0;
   sheetTrebleBottom = 0;
   sheetBassTop = 0;
   sheetBassBottom = 0;
+  private _activeSheetScale = 1;
   piano: PianoRenderer;
   private _staffCache: HTMLCanvasElement | null = null;
   private _cachedStaffScale = -1;
   private _cachedStaffWidth = -1;
+  private _cachedStaffTop = -1;
+  private _cachedStaffBottom = -1;
   private _labelFontCache = new Map<string, string>();
   private _labelTextWidth = new Map<string, number>();
   private _labelFontUi = '';
@@ -415,6 +346,28 @@ export class Renderer {
 
   beginFrame(nowMs: number): void {
     this._now = nowMs;
+  }
+
+  setStandardNotation(enabled: boolean): void {
+    this.standardNotation = enabled;
+    this.sheetBottom = enabled ? this._standardNotationBottom() : 0;
+  }
+
+  private _standardNotationBottom(): number {
+    return this.height - this.height * 0.16 - 12;
+  }
+
+  pianoKeyLayout(
+    noteName: string,
+    visibleRange?: VisibleRange | null,
+  ): PianoKeyLayout & { y: number; height: number } {
+    const layout = getPianoKeyLayout(noteName, this.width, visibleRange);
+    const pianoHeight = this.height * 0.16;
+    return {
+      ...layout,
+      y: this.height - pianoHeight,
+      height: layout.isBlack ? pianoHeight * 0.56 : pianoHeight,
+    };
   }
 
   drawHighway(
@@ -559,13 +512,14 @@ export class Renderer {
     const { sheetBarX: barX, sheetBarW: barW, sheetViewStart: vs, sheetViewEnd: ve } = this;
     if (note.time < vs || note.time > ve) return null;
 
-    const staffLineSpacing = SHEET_STAFF_LINE_SPACING * this.sheetScale;
+    const staffLineSpacing = SHEET_STAFF_LINE_SPACING * this._activeSheetScale;
     const pos = SHEET_NOTE_POSITIONS[note.key];
     if (pos === undefined) return null;
 
     const staffTop = note.hand === HandSide.Left ? this.sheetBassTop : this.sheetTrebleTop;
     const x = barX + ((note.time - vs) / (ve - vs)) * barW;
-    const y = staffTop + (7 - pos) * (staffLineSpacing / 2);
+      const y = staffTop + (8 - pos) * (staffLineSpacing / 2);
+
     return { x, y };
   }
 
@@ -1077,6 +1031,7 @@ export class Renderer {
     _clefW: number,
     margin: number,
     sheetBottom: number,
+    sheetScale: number,
   ): void {
     const c = themeManager.canvas;
     const w = this.canvas.width;
@@ -1111,8 +1066,10 @@ export class Renderer {
     ctx.fillText('\uD834\uDD1E', margin + 2, trebleTop + 2 * staffLineSpacing);
     ctx.fillText('\uD834\uDD22', margin + 2, bassTop + 2 * staffLineSpacing);
 
-    this._cachedStaffScale = this.sheetScale;
+    this._cachedStaffScale = sheetScale;
     this._cachedStaffWidth = this.width;
+    this._cachedStaffTop = sheetTop;
+    this._cachedStaffBottom = sheetBottom;
   }
 
   drawSheetMusic(
@@ -1134,24 +1091,35 @@ export class Renderer {
     if ((!trebleNotes.length && !bassNotes.length) || songDuration <= 0) return;
     const ctx = this.ctx;
     const sheetTop = SHEET_TOP_OFFSET;
-    const staffLineSpacing = SHEET_STAFF_LINE_SPACING * this.sheetScale;
+    const availableHeight = this._standardNotationBottom() - sheetTop;
+    const standardScale = Math.min(
+      STANDARD_NOTATION_MAX_SCALE,
+      Math.max(0.5, availableHeight / SHEET_BASE_HEIGHT),
+    );
+    const sheetScale = this.standardNotation ? standardScale : this.sheetScale;
+    const staffLineSpacing = SHEET_STAFF_LINE_SPACING * sheetScale;
     const staffH = 4 * staffLineSpacing;
-    const clefW = CLEF_WIDTH * this.sheetScale;
-    const margin = SHEET_MARGIN * this.sheetScale;
+    const clefW = CLEF_WIDTH * sheetScale;
+    const margin = SHEET_MARGIN * sheetScale;
 
-    const trebleTop = sheetTop + STAFF_TOP_PADDING * this.sheetScale;
-    const bassTop = trebleTop + staffH + STAFF_GAP * this.sheetScale;
-    const sheetBottom = bassTop + staffH + STAFF_BOTTOM_PADDING * this.sheetScale;
+    const renderedHeight = SHEET_BASE_HEIGHT * sheetScale;
+    const verticalOffset = this.standardNotation ? Math.max(0, (availableHeight - renderedHeight) / 2) : 0;
+    const trebleTop = sheetTop + verticalOffset + STAFF_TOP_PADDING * sheetScale;
+    const bassTop = trebleTop + staffH + STAFF_GAP * sheetScale;
+    const sheetBottom = bassTop + staffH + STAFF_BOTTOM_PADDING * sheetScale;
     this.sheetBottom = sheetBottom;
     this.sheetTrebleTop = trebleTop;
     this.sheetTrebleBottom = trebleTop + staffH;
     this.sheetBassTop = bassTop;
     this.sheetBassBottom = bassTop + staffH;
+    this._activeSheetScale = sheetScale;
 
     if (
       !this._staffCache ||
-      this._cachedStaffScale !== this.sheetScale ||
-      this._cachedStaffWidth !== this.width
+      this._cachedStaffScale !== sheetScale ||
+      this._cachedStaffWidth !== this.width ||
+      this._cachedStaffTop !== sheetTop ||
+      this._cachedStaffBottom !== sheetBottom
     ) {
       this._renderStaffCache(
         sheetTop,
@@ -1161,6 +1129,7 @@ export class Renderer {
         clefW,
         margin,
         sheetBottom,
+        sheetScale,
       );
     }
     ctx.drawImage(this._staffCache!, 0, 0);
@@ -1168,7 +1137,8 @@ export class Renderer {
     const barX = margin + clefW;
     const barW = this.width - barX - margin;
     const viewStart = viewWindow ? viewWindow.start : currentTime - 0.5;
-    const viewEnd = viewWindow ? viewWindow.end : currentTime + SHEET_BEATS_VISIBLE * (60 / bpm);
+    const beatsVisible = this.standardNotation ? STANDARD_NOTATION_BEATS_VISIBLE : SHEET_BEATS_VISIBLE;
+    const viewEnd = viewWindow ? viewWindow.end : currentTime + beatsVisible * (60 / bpm);
     this.sheetBarX = barX;
     this.sheetBarW = barW;
     this.sheetViewStart = viewStart;
@@ -1183,6 +1153,8 @@ export class Renderer {
       viewStart,
       viewEnd,
       staffLineSpacing,
+      scale: sheetScale,
+      beatsPerSecond: bpm / 60,
     };
 
     this._drawBeatLines(L, bpm);
@@ -1230,60 +1202,135 @@ export class Renderer {
     ctx.stroke();
   }
 
+  private _sheetDuration(duration: number, beatsPerSecond: number): {
+    beats: number;
+    flags: number;
+    hollow: boolean;
+    dotted: boolean;
+    whole: boolean;
+  } {
+    const beats = duration * beatsPerSecond;
+    const values = [4, 3, 2, 1.5, 1, 0.75, 0.5, 0.25, 0.125];
+    const nearest = values.reduce((best, value) =>
+      Math.abs(beats - value) < Math.abs(beats - best) ? value : best,
+    );
+
+    return {
+      beats: nearest,
+      flags: nearest >= 1 ? 0 : nearest >= 0.5 ? 1 : nearest >= 0.25 ? 2 : 3,
+      hollow: nearest >= 2,
+      dotted: nearest === 3 || nearest === 1.5 || nearest === 0.75,
+      whole: nearest >= 4,
+    };
+  }
+
+  private _drawLedgerLines(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    staffTop: number,
+    spacing: number,
+    color: string,
+  ): void {
+    const top = staffTop;
+    const bottom = staffTop + spacing * 4;
+    const width = spacing * 1.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, spacing / 10);
+
+    for (let lineY = top - spacing; y <= lineY; lineY -= spacing) {
+      ctx.beginPath();
+      ctx.moveTo(x - width, lineY);
+      ctx.lineTo(x + width, lineY);
+      ctx.stroke();
+    }
+
+    for (let lineY = bottom + spacing; y >= lineY; lineY += spacing) {
+      ctx.beginPath();
+      ctx.moveTo(x - width, lineY);
+      ctx.lineTo(x + width, lineY);
+      ctx.stroke();
+    }
+  }
+
+  private _drawSheetFlag(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    stemDir: number,
+    scale: number,
+    index: number,
+  ): void {
+    const offset = index * 5 * scale;
+    ctx.beginPath();
+    ctx.moveTo(x, y + offset * stemDir);
+    ctx.bezierCurveTo(
+      x + 5 * scale,
+      y + (offset + 1 * scale) * stemDir,
+      x + 9 * scale,
+      y + (offset + 5 * scale) * stemDir,
+      x + 3 * scale,
+      y + (offset + 10 * scale) * stemDir,
+    );
+    ctx.stroke();
+  }
+
   private _drawSheetNote(note: SongNote, staffTop: number, L: SheetLayout): void {
     const c = themeManager.canvas;
-    const { ctx, barX, barW, viewStart, viewEnd, staffLineSpacing } = L;
+    const { ctx, barX, barW, viewStart, viewEnd, staffLineSpacing, scale } = L;
     const pos = SHEET_NOTE_POSITIONS[note.key];
     if (pos === undefined) return;
-    const noteY = staffTop + (7 - pos) * (staffLineSpacing / 2);
+    const noteY = staffTop + (8 - pos) * (staffLineSpacing / 2);
 
     const x = barX + ((note.time - viewStart) / (viewEnd - viewStart)) * barW;
-    const r = SHEET_NOTE_RADIUS * this.sheetScale;
-    const color = note.selected ? handColor(note.key) : c.backingNote;
-    const filled = note.duration < 0.75;
+    const r = SHEET_NOTE_RADIUS * scale;
+    const duration = this._sheetDuration(note.duration, L.beatsPerSecond);
+    const color = note.hit ? c.hitNote : note.selected ? handColor(note.key) : c.backingNote;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    this._drawLedgerLines(ctx, x, noteY, staffTop, staffLineSpacing, color);
 
-    // Square, grid-snapped heads keep the sheet in the pixel language
-    const SHEET_PIXEL = 2;
-    const headX = pixelSnap(x, SHEET_PIXEL);
-    const headY = pixelSnap(noteY, SHEET_PIXEL);
-    const side = Math.max(SHEET_PIXEL * 2, pixelSnap(r * 2, SHEET_PIXEL));
-    const half = side / 2;
-
-    if (note.hit) {
-      ctx.fillStyle = c.hitNote;
-      ctx.strokeStyle = c.hitNote;
-    } else {
-      ctx.fillStyle = color;
-      ctx.strokeStyle = color;
-    }
-    ctx.lineWidth = 2;
-    if (filled) {
-      ctx.fillRect(headX - half, headY - half, side, side);
-    } else {
-      ctx.strokeRect(headX - half, headY - half, side, side);
-    }
-
-    const stemLen = staffLineSpacing * 2.5;
-    const stemUp = pos <= 3;
-    const stemDir = stemUp ? -1 : 1;
-    const stemX = stemUp ? x + r : x - r;
-    ctx.lineWidth = 1;
+    ctx.save();
+    ctx.translate(x, noteY);
+    ctx.rotate(-0.32);
     ctx.beginPath();
-    ctx.moveTo(stemX, noteY);
-    ctx.lineTo(stemX, noteY + stemDir * stemLen);
-    ctx.stroke();
+    ctx.ellipse(0, 0, r * 1.15, r * 0.68, 0, 0, Math.PI * 2);
 
-    if (note.duration < 0.3 && !isLowEndDevice()) {
-      const flagBaseY = noteY + stemDir * stemLen;
-      ctx.beginPath();
-      ctx.moveTo(stemX, flagBaseY);
-      ctx.quadraticCurveTo(
-        stemX + 6 * this.sheetScale,
-        flagBaseY + stemDir * 4 * this.sheetScale,
-        stemX + 2 * this.sheetScale,
-        flagBaseY + stemDir * 9 * this.sheetScale,
-      );
+    if (duration.hollow || duration.whole) {
+      ctx.lineWidth = Math.max(1.5, scale);
       ctx.stroke();
+    } else {
+      ctx.fill();
+    }
+    ctx.restore();
+
+    if (note.key.includes('#')) {
+      ctx.font = `${staffLineSpacing * 1.5}px ${themeManager.fonts.mono}`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('#', x - r * 1.7, noteY);
+    }
+
+    if (!duration.whole) {
+      const stemUp = pos <= 3;
+      const stemDir = stemUp ? -1 : 1;
+      const stemX = stemUp ? x + r * 0.95 : x - r * 0.95;
+      const stemEndY = noteY + stemDir * staffLineSpacing * 2.5;
+      ctx.lineWidth = Math.max(1, scale);
+      ctx.beginPath();
+      ctx.moveTo(stemX, noteY);
+      ctx.lineTo(stemX, stemEndY);
+      ctx.stroke();
+
+      for (let i = 0; i < duration.flags; i++) {
+        this._drawSheetFlag(ctx, stemX, stemEndY, stemDir, scale, i);
+      }
+    }
+
+    if (duration.dotted) {
+      ctx.beginPath();
+      ctx.arc(x + r * 2.1, noteY - staffLineSpacing * 0.45, Math.max(1.5, scale * 1.2), 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -1305,9 +1352,7 @@ export class Renderer {
     const cursorColor = themeManager.canvas.playbackCursor;
     const showCursor = viewWindow ? currentTime >= viewStart && currentTime <= viewEnd : true;
     if (!showCursor) return;
-    const cursorX = viewWindow
-      ? barX + ((currentTime - viewStart) / (viewEnd - viewStart)) * barW
-      : barX;
+    const cursorX = barX + ((currentTime - viewStart) / (viewEnd - viewStart)) * barW;
     ctx.fillStyle = cursorColor;
     if (viewWindow) {
       ctx.globalAlpha = 0.25;
@@ -1315,10 +1360,27 @@ export class Renderer {
       ctx.globalAlpha = 1;
       ctx.fillRect(cursorX - 1, sheetTop, 2, sheetBottom - sheetTop);
     } else {
-      ctx.globalAlpha = 0.25;
-      ctx.fillRect(cursorX - 3, sheetTop, 6, sheetBottom - sheetTop);
+      const standard = this.standardNotation;
+      ctx.globalAlpha = standard ? 0.18 : 0.25;
+      ctx.fillRect(cursorX - (standard ? 10 : 3), sheetTop, standard ? 20 : 6, sheetBottom - sheetTop);
       ctx.globalAlpha = 1;
-      ctx.fillRect(cursorX - 0.5, sheetTop, 1.5, sheetBottom - sheetTop);
+
+      if (standard) {
+        ctx.save();
+        ctx.shadowColor = cursorColor;
+        ctx.shadowBlur = isLowEndDevice() ? 0 : 18;
+        ctx.fillRect(cursorX - 1.5, sheetTop, 3, sheetBottom - sheetTop);
+        ctx.shadowBlur = 0;
+        ctx.fillRect(cursorX - 7, sheetTop, 14, 3);
+        ctx.fillRect(cursorX - 7, sheetBottom - 3, 14, 3);
+        ctx.font = `bold 12px ${themeManager.fonts.mono}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('HIT', cursorX, sheetTop - 8);
+        ctx.restore();
+      } else {
+        ctx.fillRect(cursorX - 0.5, sheetTop, 1.5, sheetBottom - sheetTop);
+      }
     }
   }
 
@@ -1361,13 +1423,13 @@ export class Renderer {
       if (!best) return;
       const pixelPos = this.notePixelPosition(best);
       if (!pixelPos) return;
-      const r = (SHEET_NOTE_RADIUS + 5) * this.sheetScale;
+      const r = (SHEET_NOTE_RADIUS + 5) * L.scale;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.beginPath();
       ctx.arc(pixelPos.x, pixelPos.y, r, 0, Math.PI * 2);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5 * this.sheetScale;
+      ctx.lineWidth = 2.5 * L.scale;
       ctx.stroke();
       ctx.restore();
     };
@@ -1433,7 +1495,8 @@ export class Renderer {
       if (pos === undefined) return null;
       const staffTop = n.hand === HandSide.Left ? this.sheetBassTop : this.sheetTrebleTop;
       const x = barX + ((n.time - viewStart) / (viewEnd - viewStart)) * barW;
-      const y = staffTop + (7 - pos) * (staffLineSpacing / 2);
+    const y = staffTop + (8 - pos) * (staffLineSpacing / 2);
+
       return { x, y };
     };
 
@@ -1442,13 +1505,13 @@ export class Renderer {
       if (n.time < selectedLoop.startTime || n.time > selectedLoop.endTime) return;
       const p = notePosition(n);
       if (!p) return;
-      const r = (SHEET_NOTE_RADIUS + 5) * this.sheetScale;
+      const r = (SHEET_NOTE_RADIUS + 5) * L.scale;
       ctx.save();
       ctx.globalAlpha = 0.6;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2 * this.sheetScale;
+      ctx.lineWidth = 2 * L.scale;
       ctx.stroke();
       ctx.restore();
     };

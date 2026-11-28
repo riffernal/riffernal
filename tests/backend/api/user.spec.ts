@@ -90,6 +90,19 @@ test.describe('API: user settings', () => {
     expect(body.low_end_device_mode).toBe(false);
   });
 
+  test('PUT /api/user/settings round-trips standard_notation', async ({ request }) => {
+    const jsonHeaders = await authJsonHeaders(request);
+    const res = await request.put('/api/user/settings', {
+      data: { standard_notation: true },
+      headers: jsonHeaders,
+    });
+    expect(res.ok()).toBeTruthy();
+
+    const headers = await authHeaders(request);
+    const getRes = await request.get('/api/user', { headers });
+    expect(await getRes.json()).toHaveProperty('standard_notation', true);
+  });
+
   test('PUT /api/user/settings handles empty body gracefully', async ({ request }) => {
     const jsonHeaders = await authJsonHeaders(request);
     const res = await request.put('/api/user/settings', {
