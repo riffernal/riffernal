@@ -1362,10 +1362,27 @@ export class Renderer {
       ctx.globalAlpha = 1;
       ctx.fillRect(cursorX - 1, sheetTop, 2, sheetBottom - sheetTop);
     } else {
-      ctx.globalAlpha = 0.25;
-      ctx.fillRect(cursorX - 3, sheetTop, 6, sheetBottom - sheetTop);
+      const standard = this.standardNotation;
+      ctx.globalAlpha = standard ? 0.18 : 0.25;
+      ctx.fillRect(cursorX - (standard ? 10 : 3), sheetTop, standard ? 20 : 6, sheetBottom - sheetTop);
       ctx.globalAlpha = 1;
-      ctx.fillRect(cursorX - 0.5, sheetTop, 1.5, sheetBottom - sheetTop);
+
+      if (standard) {
+        ctx.save();
+        ctx.shadowColor = cursorColor;
+        ctx.shadowBlur = isLowEndDevice() ? 0 : 18;
+        ctx.fillRect(cursorX - 1.5, sheetTop, 3, sheetBottom - sheetTop);
+        ctx.shadowBlur = 0;
+        ctx.fillRect(cursorX - 7, sheetTop, 14, 3);
+        ctx.fillRect(cursorX - 7, sheetBottom - 3, 14, 3);
+        ctx.font = `bold 12px ${themeManager.fonts.mono}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('HIT', cursorX, sheetTop - 8);
+        ctx.restore();
+      } else {
+        ctx.fillRect(cursorX - 0.5, sheetTop, 1.5, sheetBottom - sheetTop);
+      }
     }
   }
 
