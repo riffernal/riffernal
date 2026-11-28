@@ -208,6 +208,8 @@ test('full standard notation expands the staff through the play area', async ({ 
       sheetHeight: renderer.sheetBottom - 84,
       sheetBottom: renderer.sheetBottom,
       pianoTop: renderer.height * 0.84,
+      playLineX: renderer.sheetBarX + ((0.5 - renderer.sheetViewStart) / (renderer.sheetViewEnd - renderer.sheetViewStart)) * renderer.sheetBarW,
+      noteX: renderer.notePixelPosition(notes.trebleNotes[0])?.x,
       beatsVisible:
         (renderer.sheetViewEnd - renderer.sheetViewStart) / (60 / song.bpm),
       staffScale:
@@ -218,11 +220,14 @@ test('full standard notation expands the staff through the play area', async ({ 
     sheetHeight: number;
     sheetBottom: number;
     pianoTop: number;
+    playLineX: number;
+    noteX: number;
     beatsVisible: number;
     staffScale: number;
   };
 
   expect(layout.standard).toBe(true);
+  expect(layout.noteX).toBeCloseTo(layout.playLineX, 1);
   expect(layout.beatsVisible).toBeCloseTo(9, 1);
   expect(layout.staffScale).toBeLessThanOrEqual(3);
   expect(layout.staffScale).toBeGreaterThanOrEqual(2);

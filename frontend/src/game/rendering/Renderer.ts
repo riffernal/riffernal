@@ -1352,9 +1352,7 @@ export class Renderer {
     const cursorColor = themeManager.canvas.playbackCursor;
     const showCursor = viewWindow ? currentTime >= viewStart && currentTime <= viewEnd : true;
     if (!showCursor) return;
-    const cursorX = viewWindow
-      ? barX + ((currentTime - viewStart) / (viewEnd - viewStart)) * barW
-      : barX;
+    const cursorX = barX + ((currentTime - viewStart) / (viewEnd - viewStart)) * barW;
     ctx.fillStyle = cursorColor;
     if (viewWindow) {
       ctx.globalAlpha = 0.25;
